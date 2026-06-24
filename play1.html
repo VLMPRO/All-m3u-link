@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Modern Plyr Video Player</title>
+    
+    <link rel="stylesheet" href="https://cdn.plyr.io/3.7.8/plyr.css" />
+
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #0f0f14;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            font-family: sans-serif;
+        }
+
+        .player-container {
+            width: 100%;
+            max-width: 850px;
+            padding: 15px;
+            box-sizing: border-box;
+        }
+
+        /* Premium Customizations for Plyr */
+        .plyr {
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            --plyr-color-main: #00bfff; /* Custom Accent Color */
+        }
+    </style>
+</head>
+<body>
+
+    <div class="player-container">
+        <video id="player" playsinline controls crossorigin poster="https://bitdash-a.akamaihd.net/content/sintel/poster.png">
+            <source src="http://198.195.239.50:8095/unt-s/video.m3u8" type="application/x-mpegURL">
+        </video>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <script src="https://cdn.plyr.io/3.7.8/plyr.polyfilled.js"></script>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const video = document.getElementById('player');
+            const source = video.getElementsByTagName('source')[0].src;
+            
+            // Plyr Options & Controls Configuration
+            const defaultOptions = {
+                controls: [
+                    'play-large', 'play', 'progress', 'current-time', 
+                    'duration', 'mute', 'volume', 'captions', 
+                    'settings', 'pip', 'airplay', 'fullscreen'
+                ],
+                settings: ['quality', 'speed', 'loop'],
+                quality: { default: 0, options: [0], forced: true, onChange: (e) => updateQuality(e) }
+            };
+
+            if (Hls.isSupported()) {
+                // Initialize HLS.js
+                const hls = new Hls({
+                    maxMaxBufferLength: 10 // Reduces loading/buffering latencies
+                });
+                hls.loadSource(source);
+                hls.attachMedia(video);
+                
+                hls.on(Hls.Events.MANIFEST_PARSED, function (event, data) {
+                    // Automatically read and inject available qualities dynamically from the link
+                    const availableQualities = data.levels.map((l) => l.height);
+                    availableQualities.unshift(0); // 0 acts as 'Auto' in this logic
+
+                    defaultOptions.quality = {
+                        default: 0,
+                        options: availableQualities,
+                        forced: true,
+                        onChange: (e) => {
+                            if (e === 0) {
+                                hls.currentLevel = -1; // -1 resets it to Auto-Quality
+                            } else {
+                                data.levels.forEach((level, levelIndex) => {
+                                    if (level.height === e) {
+                                        hls.currentLevel = levelIndex;
+                                    }
+                                });
+                            }
+                        }
+                    };
+                    
+                    // Setup Plyr after fetching qualities
+                    const player = new Plyr(video, defaultOptions);
+                });
+
+                window.hls = hls;
+            } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                // Native Safari / iOS support fallback
+                video.src = source;
+                const player = new Plyr(video, defaultOptions);
+            } else {
+                // Normal MP4 fallback if HLS fails entirely
+                const player = new Plyr(video, defaultOptions);
+            }
+        });
+    </script>
+</body>
+</html>
